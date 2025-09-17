@@ -8,26 +8,29 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
-<body class="min-h-screen bg-sky-300">
+<body class="bg-sky-300">
   <div id="app"
-       class="min-h-screen"
+       class="min-h-[100dvh]"
        data-logo-url="{{ url_for('static', filename='images/BEAVERlogo.png') }}"
        data-session-id="{{ server_session_id }}">
-    <div v-if="!ready" class="max-w-sm mx-auto px-5 py-10 text-center">
-      <img :src="logoUrl" alt="BEAVER Logo" class="block max-w-full h-auto mx-auto mb-5" />
-      <h2 class="text-xl font-bold text-rose-500 mb-3">名前を入力してください</h2>
-      <input type="text" v-model.trim="nameInput" placeholder="ニックネーム（表示用の名前）"
-             class="w-full max-w-xs mx-auto block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-3" />
-      <input type="text" v-model.trim="realNameInput" placeholder="本名（記録用）"
-             class="w-full max-w-xs mx-auto block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-5" />
-      <button @click="saveName"
-              class="w-full max-w-xs mx-auto block bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
-        OK
-      </button>
+
+    <div v-if="!ready" class="min-h-[100dvh] grid place-items-center px-5">
+      <div class="w-full max-w-sm text-center">
+        <img :src="logoUrl" alt="BEAVER Logo" class="block max-w-full h-auto mx-auto mb-5" />
+        <h2 class="text-xl font-bold text-rose-500 mb-3">名前を入力してください</h2>
+        <input type="text" v-model.trim="nameInput" placeholder="ニックネーム（表示用の名前）"
+               class="w-full block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-3" />
+        <input type="text" v-model.trim="realNameInput" placeholder="本名（記録用）"
+               class="w-full block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-5" />
+        <button @click="saveName"
+                class="w-full bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
+          OK
+        </button>
+      </div>
     </div>
 
-    <div v-else class="flex flex-col h-screen overflow-hidden">
-      <div id="commentListWrapper" ref="listWrapper" class="flex-1 overflow-y-auto p-3 pb-40">
+    <div v-else class="flex flex-col">
+      <div id="commentListWrapper" ref="listWrapper" class="h-[85dvh] overflow-y-auto p-3">
         <ul class="space-y-2">
         {% raw %}
           <li v-for="(m, i) in messages" :key="i" class="bg-white p-2 rounded-md shadow-sm break-words">
@@ -37,25 +40,27 @@
         </ul>
       </div>
 
-      <div class="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)]">
-        <h2 class="text-lg font-bold text-rose-500 mb-2">comment</h2>
-        <label class="block font-bold text-rose-500 mb-1" for="templates">定型文を選択</label>
-        <select id="templates" v-model="templateValue" @change="applyTemplate"
-                class="w-full rounded-md border border-gray-300 px-2 py-2 mb-2 text-base">
-          <option value="">-------- 定型文を選択 --------</option>
-          <option value="おはようございます">おはようございます</option>
-          <option value="こんにちは">こんにちは</option>
-          <option value="よろしくお願いします">よろしくお願いします</option>
-          <option value="ありがとうございました">ありがとうございました</option>
-          <option value="お疲れさまでした">お疲れさまでした</option>
-          <option value="頑張れー">頑張れー</option>
-        </select>
+      <div class="h-[15dvh] bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)] flex flex-col gap-2">
+        <h2 class="text-lg font-bold text-rose-500">comment</h2>
+        <div>
+          <label class="block font-bold text-rose-500 mb-1" for="templates">定型文を選択</label>
+          <select id="templates" v-model="templateValue" @change="applyTemplate"
+                  class="w-full rounded-md border border-gray-300 px-2 py-2 text-base">
+            <option value="">-------- 定型文を選択 --------</option>
+            <option value="おはようございます">おはようございます</option>
+            <option value="こんにちは">こんにちは</option>
+            <option value="よろしくお願いします">よろしくお願いします</option>
+            <option value="ありがとうございました">ありがとうございました</option>
+            <option value="お疲れさまでした">お疲れさまでした</option>
+            <option value="頑張れー">頑張れー</option>
+          </select>
+        </div>
 
-        <form @submit.prevent="sendComment" class="flex flex-wrap gap-2">
+        <form @submit.prevent="sendComment" class="flex gap-2">
           <input type="text" v-model.trim="msg" required placeholder="コメントの内容を入力..."
                  class="flex-1 min-w-0 rounded-md border border-gray-300 px-3 py-2 text-base shadow-[3px_3px_0px_#2b3a4b]" />
           <button type="submit"
-                  class="flex items-center bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-base shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
+                  class="flex items-center justify-center bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-base shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
             送信
           </button>
         </form>
