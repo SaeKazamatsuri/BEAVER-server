@@ -1,7 +1,3 @@
-# server_relay.py
-# コメント同期サーバー
-
-# ─── 標準ライブラリ ───
 import os
 import sqlite3
 import logging
@@ -10,23 +6,21 @@ from datetime import datetime
 import threading
 import tkinter as tk
 
-# ─── 外部ライブラリ ───
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO, emit
 
-# ─── 定数 ───
 SERVER_SESSION_ID = str(uuid4())
 DB_PATH = "messages.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_PATH = os.path.join(BASE_DIR, "boot.log")
 
-# ─── ログ設定 ───
 logging.basicConfig(
-    filename=r"C:\Users\purana\Desktop\server\boot.log",
+    filename=LOG_PATH,
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logging.info("server_relay.py started.")
 
-# ─── DB 操作関数 ───
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
@@ -56,15 +50,12 @@ def insert_comment(entry):
     conn.commit()
     conn.close()
 
-# ─── Flask & Socket.IO ───
 app = Flask(__name__, template_folder="templates", static_folder="static")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-# ─── 起動時に履歴をロード ───
 init_db()
 message_log = fetch_all()
 
-# ─── インジケータウィンドウ ───
 def _launch_indicator():
     root = tk.Tk()
     root.title("Server Relay Indicator")
@@ -82,15 +73,13 @@ def _launch_indicator():
 
 threading.Thread(target=_launch_indicator, daemon=True).start()
 
-# ─── ルーティング ───
 @app.route("/")
 def index():
     return render_template("web_index.html", initial_messages=message_log, server_session_id=SERVER_SESSION_ID)
 
-# ─── Socket.IO イベント ───
 @socketio.on("connect")
 def _on_connect():
-    emit("history", message_log)  # 履歴を単一クライアントへ送信
+    emit("history", message_log)
     logging.info("Client connected")
 
 @socketio.on("history_request")
@@ -99,7 +88,6 @@ def _on_history_request():
 
 @socketio.on("new_comment")
 def _on_new_comment(data):
-    # 受信コメントを保存 & ブロードキャスト
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     entry = {
         "name": data.get("name", "名無し"),
@@ -112,6 +100,5 @@ def _on_new_comment(data):
     emit("new_comment", entry, broadcast=True)
     logging.info(f"{entry['name']}: {entry['text']}")
 
-# ─── エントリポイント ───
 if __name__ == "__main__":
     socketio.run(app, host="127.0.0.1", port=5000)

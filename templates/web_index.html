@@ -1,374 +1,164 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>コメント送信フォーム</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="min-h-screen bg-sky-300">
+  <div id="app"
+       class="min-h-screen"
+       data-logo-url="{{ url_for('static', filename='images/BEAVERlogo.png') }}"
+       data-session-id="{{ server_session_id }}">
+    <div v-if="!ready" class="max-w-sm mx-auto px-5 py-10 text-center">
+      <img :src="logoUrl" alt="BEAVER Logo" class="block max-w-full h-auto mx-auto mb-5" />
+      <h2 class="text-xl font-bold text-rose-500 mb-3">名前を入力してください</h2>
+      <input type="text" v-model.trim="nameInput" placeholder="ニックネーム（表示用の名前）"
+             class="w-full max-w-xs mx-auto block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-3" />
+      <input type="text" v-model.trim="realNameInput" placeholder="本名（記録用）"
+             class="w-full max-w-xs mx-auto block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-5" />
+      <button @click="saveName"
+              class="w-full max-w-xs mx-auto block bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
+        OK
+      </button>
+    </div>
 
-  <style>
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: sans-serif;
-      background-color: #66ccf2;
-      overflow: hidden;
-    }
+    <div v-else class="flex flex-col h-screen overflow-hidden">
+      <div id="commentListWrapper" ref="listWrapper" class="flex-1 overflow-y-auto p-3 pb-40">
+        <ul class="space-y-2">
+        {% raw %}
+          <li v-for="(m, i) in messages" :key="i" class="bg-white p-2 rounded-md shadow-sm break-words">
+            <strong>{{ m.name }}</strong>: {{ m.text }}
+          </li>
+        {% endraw %}
+        </ul>
+      </div>
 
-    .logo {
-      display: block;
-      max-width: 100%;
-      height: auto;
-      margin: 0 auto 20px;
-    }
+      <div class="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)]">
+        <h2 class="text-lg font-bold text-rose-500 mb-2">comment</h2>
+        <label class="block font-bold text-rose-500 mb-1" for="templates">定型文を選択</label>
+        <select id="templates" v-model="templateValue" @change="applyTemplate"
+                class="w-full rounded-md border border-gray-300 px-2 py-2 mb-2 text-base">
+          <option value="">-------- 定型文を選択 --------</option>
+          <option value="おはようございます">おはようございます</option>
+          <option value="こんにちは">こんにちは</option>
+          <option value="よろしくお願いします">よろしくお願いします</option>
+          <option value="ありがとうございました">ありがとうございました</option>
+          <option value="お疲れさまでした">お疲れさまでした</option>
+          <option value="頑張れー">頑張れー</option>
+        </select>
 
-    #nameEntry {
-      display: none;
-      padding: 40px 20px;
-      text-align: center;
+        <form @submit.prevent="sendComment" class="flex flex-wrap gap-2">
+          <input type="text" v-model.trim="msg" required placeholder="コメントの内容を入力..."
+                 class="flex-1 min-w-0 rounded-md border border-gray-300 px-3 py-2 text-base shadow-[3px_3px_0px_#2b3a4b]" />
+          <button type="submit"
+                  class="flex items-center bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-base shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
+            送信
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
 
-      /* 横切れ防止のため幅調整 */
-      width: 320px;
-      margin: 0 auto;
-      box-sizing: border-box;
-    }
-
-    #nameEntry input[type="text"] {
-      width: 100%;
-      max-width: 300px;
-      padding: 10px;
-      font-size: 18px;
-      border-radius: 8px;
-      border: 1px solid #aaa;
-      margin-bottom: 15px;
-      box-sizing: border-box;
-    }
-
-    #nameEntry button {
-      width: 100%;
-      max-width: 200px;
-      background-color: #e4446f;
-      color: white;
-      font-weight: bold;
-      padding: 10px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      box-sizing: border-box;
-      margin: 0 auto;
-      display: block;
-      box-shadow: 3px 3px 0px #2b3a4b;
-    }
-
-    #nameEntry button:hover {
-      transform: translateY(-1px);
-    }
-
-    #commentSection {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    #commentListWrapper {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
-      box-sizing: border-box;
-    }
-
-    ul {
-      list-style-type: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    li {
-      background: #fff;
-      padding: 0.5em;
-      margin-bottom: 0.5em;
-      border-radius: 6px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      word-break: break-word;
-    }
-
-    .form-wrapper {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background-color: white;
-      border-radius: 20px 20px 0 0;
-      padding: 15px;
-      border: 2px solid #ccc;
-      box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
-    }
-
-    h2 {
-      font-size: 1.5em;
-      text-align: center;
-      color: #e4446f;
-      margin: 0 0 10px;
-      font-weight: bold;
-      /*text-shadow: 1px 1px white;*/
-    }
-
-    label {
-      display: block;
-      font-weight: bold;
-      color: #e4446f;
-      margin-bottom: 5px;
-    }
-
-    #templates {
-      width: 100%;
-      padding: 8px;
-      border-radius: 5px;
-      border: 1px solid #aaa;
-      margin-bottom: 10px;
-      font-size: 16px;
-      box-sizing: border-box;
-    }
-
-    form {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    input[type="text"] {
-      flex: 1 1 60%;
-      min-width: 0;
-      padding: 10px;
-      font-size: 16px;
-      border-radius: 5px;
-      border: 1px solid #aaa;
-      box-sizing: border-box;
-      box-shadow: 3px 3px 0px #2b3a4b;
-    }
-
-    button[type="submit"] {
-      flex: 0 0 auto;
-      background-color: #e4446f;
-      color: white;
-      font-weight: bold;
-      padding: 10px 15px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      box-shadow: 3px 3px 0px #2b3a4b;
-    }
-
-    button[type="submit"]::after {
-      content: "✈️";
-      margin-left: 5px;
-    }
-
-    .button:hover {
-      transform: translateY(-1px);
-    }
-
-    .name_label {
-      display: block;
-      text-align: left;
-      margin: 10px auto 5px;
-      width: 300px;
-      font-weight: bold;
-      color: #e4446f;
-      font-size: 18px;
-    }
-
-    /* スマホ向けの調整 */
-    @media screen and (max-width: 600px) {
-      form {
-        flex-direction: column;
-      }
-
-      input[type="text"],
-      button[type="submit"] {
-        width: 100%;
-      }
-
-      h2 {
-        font-size: 1.2em;
-      }
-
-      /* ニックネーム入力部分の幅も狭めて対応 */
-      #nameEntry {
-        width: 90%;
-        padding: 20px 10px;
-      }
-
-      #nameEntry input[type="text"],
-      #nameEntry button {
-        max-width: 100%;
-        width: 100%;
-      }
-    }
-  </style>
+  <script id="initial-messages" type="application/json">
+    {{ initial_messages | tojson }}
+  </script>
 
   <script>
-    const socket = io();
+    const { createApp, nextTick } = Vue;
+    const rootEl = document.getElementById('app');
+    const SERVER_SESSION_ID = rootEl.dataset.sessionId;
+    const LOGO_URL = rootEl.dataset.logoUrl;
+    const initialMessages = JSON.parse(document.getElementById('initial-messages').textContent || '[]');
 
-    /* ---------- 受信処理 ---------- */
-    socket.on("history", function (data) {
-      renderCommentList(data);
-    });
-
-    socket.on("new_comment", function (data) {
-      appendComment(data);
-    });
-
-    /* ---------- コメント描画関数 ---------- */
-    function renderCommentList(list) {
-      const commentList = document.querySelector("ul");
-      commentList.innerHTML = "";
-      list.forEach(msg => appendComment(msg));
-    }
-
-    function appendComment(msg) {
-      const commentList = document.querySelector("ul");
-      const li = document.createElement("li");
-      li.innerHTML = `<strong>${msg.name}</strong>: ${msg.text}`;
-      commentList.appendChild(li);
-
-      const wrapper = document.getElementById("commentListWrapper");
-      wrapper.scrollTop = wrapper.scrollHeight;
-    }
-
-    /* ---------- Cookie 関連 ---------- */
-    function getCookie(name) {
-      const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-      return m ? decodeURIComponent(m[2]) : null;
-    }
-
-    function setCookie(name, value, days) {
-      const d = new Date();
-      d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/`;
-    }
-
-    /* ---------- 名前登録 ---------- */
-    function saveNameAndReload() {
-      const name = document.getElementById("nameInput").value.trim();
-      const real = document.getElementById("realNameInput").value.trim();
-      if (!name || !real) {
-        alert("ニックネームと本名を入力してください。");
-        return;
-      }
-      setCookie("username", name, 7);
-      setCookie("realname", real, 7);
-      setCookie("session_id", "{{ server_session_id }}", 7);
-      location.reload();
-    }
-
-    /* ---------- 定型文 ---------- */
-    function setTemplateText(v) {
-      document.getElementById('msg').value = v;
-    }
-
-    /* ---------- 画面切替 ---------- */
-    function loadUsernameToForm() {
-      const name = getCookie("username");
-      const real = getCookie("realname");
-      const session = getCookie("session_id");
-
-      if (!name || !real || session !== "{{ server_session_id }}") {
-        document.getElementById("nameEntry").style.display = "block";
-        document.getElementById("commentSection").style.display = "none";
-      } else {
-        document.getElementById("nameEntry").style.display = "none";
-        document.getElementById("commentSection").style.display = "flex";
-        document.getElementById("hiddenName").value = name;
-        document.getElementById("hiddenRealName").value = real;
-        setTimeout(() => {
-          document.getElementById("commentListWrapper").scrollTop =
-            document.getElementById("commentListWrapper").scrollHeight;
-        }, 100);
-      }
-      adjustPaddingForFormHeight();
-    }
-
-    function adjustPaddingForFormHeight() {
-      const form = document.querySelector(".form-wrapper");
-      const wrapper = document.getElementById("commentListWrapper");
-      if (form && wrapper) {
-        wrapper.style.paddingBottom = form.offsetHeight + "px";
-      }
-    }
-
-    window.addEventListener("load", loadUsernameToForm);
-    window.addEventListener("resize", adjustPaddingForFormHeight);
-
-    /* ---------- コメント送信 ---------- */
-    window.addEventListener("DOMContentLoaded", () => {
-      const form = document.getElementById("commentForm");
-      form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const text = document.getElementById("msg").value.trim();
-        if (!text) return;
-
-        socket.emit("new_comment", {
-          name: document.getElementById("hiddenName").value,
-          real_name: document.getElementById("hiddenRealName").value,
-          text: text
+    createApp({
+      data() {
+        return {
+          socket: null,
+          messages: initialMessages || [],
+          msg: "",
+          nameInput: "",
+          realNameInput: "",
+          username: "",
+          realname: "",
+          sessionId: "",
+          ready: false,
+          templateValue: ""
+        };
+      },
+      computed: {
+        logoUrl() {
+          return LOGO_URL;
+        }
+      },
+      mounted() {
+        const u = this.getCookie("username");
+        const r = this.getCookie("realname");
+        const s = this.getCookie("session_id");
+        if (u && r && s === SERVER_SESSION_ID) {
+          this.username = u;
+          this.realname = r;
+          this.sessionId = s;
+          this.ready = true;
+        }
+        this.socket = io();
+        this.socket.on("history", (data) => {
+          this.messages = Array.isArray(data) ? data : [];
+          this.scrollToBottom();
         });
-        document.getElementById("msg").value = "";
-      });
-    });
+        this.socket.on("new_comment", (data) => {
+          this.messages.push(data);
+          this.scrollToBottom();
+        });
+        this.$nextTick(() => this.scrollToBottom());
+      },
+      methods: {
+        sendComment() {
+          if (!this.msg) return;
+          this.socket.emit("new_comment", {
+            name: this.username,
+            real_name: this.realname,
+            text: this.msg
+          });
+          this.msg = "";
+        },
+        saveName() {
+          if (!this.nameInput || !this.realNameInput) {
+            alert("ニックネームと本名を入力してください。");
+            return;
+          }
+          this.setCookie("username", this.nameInput, 7);
+          this.setCookie("realname", this.realNameInput, 7);
+          this.setCookie("session_id", SERVER_SESSION_ID, 7);
+          this.username = this.nameInput;
+          this.realname = this.realNameInput;
+          this.sessionId = SERVER_SESSION_ID;
+          this.ready = true;
+          this.$nextTick(() => this.scrollToBottom());
+        },
+        applyTemplate() {
+          if (this.templateValue) this.msg = this.templateValue;
+        },
+        scrollToBottom() {
+          nextTick(() => {
+            const el = this.$refs.listWrapper;
+            if (el) el.scrollTop = el.scrollHeight;
+          });
+        },
+        getCookie(name) {
+          const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+          return m ? decodeURIComponent(m[2]) : null;
+        },
+        setCookie(name, value, days) {
+          const d = new Date();
+          d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+          document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/`;
+        }
+      }
+    }).mount("#app");
   </script>
-</head>
-
-<body>
-  <!-- ======== 名前入力画面 ======== -->
-  <div id="nameEntry">
-    <img src="{{ url_for('static', filename='images/BEAVERlogo.png') }}" alt="BEAVER Logo" class="logo" />
-    <h2 class="name_label">名前を入力してください</h2>
-    <input type="text" id="nameInput" placeholder="ニックネーム（表示用の名前）" />
-    <input type="text" id="realNameInput" placeholder="本名（記録用）" />
-    <button onclick="saveNameAndReload()">OK</button>
-  </div>
-
-  <!-- ======== コメントセクション ======== -->
-  <div id="commentSection">
-    <div id="commentListWrapper">
-      <ul>
-        {% for msg in initial_messages|reverse %}
-        <li><strong>{{ msg.name }}</strong>: {{ msg.text }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <!-- ======== 送信フォーム ======== -->
-    <div class="form-wrapper">
-      <h2>comment</h2>
-      <label for="templates">定型文を選択</label>
-      <select id="templates" onchange="setTemplateText(this.value)">
-        <option value="">-------- 定型文を選択 --------</option>
-        <option value="おはようございます">おはようございます</option>
-        <option value="こんにちは">こんにちは</option>
-        <option value="よろしくお願いします">よろしくお願いします</option>
-        <option value="ありがとうございました">ありがとうございました</option>
-        <option value="お疲れさまでした">お疲れさまでした</option>
-        <option value="頑張れー">頑張れー</option>
-      </select>
-
-      <form id="commentForm">
-        <input type="hidden" name="name" id="hiddenName" />
-        <input type="hidden" name="real_name" id="hiddenRealName" />
-        <input type="text" id="msg" required placeholder="コメントの内容を入力..." />
-        <button type="submit">送信</button>
-      </form>
-    </div>
-  </div>
 </body>
-
 </html>
