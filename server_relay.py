@@ -3,7 +3,8 @@ import re
 import sqlite3
 import logging
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 import threading
 import tkinter as tk
 
@@ -20,6 +21,11 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logging.info("server_relay.py started.")
+
+try:
+    JST = ZoneInfo("Asia/Tokyo")
+except Exception:
+    JST = timezone(timedelta(hours=9), "JST")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
@@ -57,6 +63,16 @@ def init_db_for(db_path: str) -> None:
     conn.commit()
     conn.close()
 
+def to_hhmm(value: str) -> str:
+    if not value:
+        return ""
+    m = re.search(r"(\d{1,2}):(\d{2})", value)
+    if m:
+        h = int(m.group(1))
+        mm = m.group(2)
+        return f"{h:02d}:{mm}"
+    return value
+
 def fetch_all_for(db_path: str):
     conn = sqlite3.connect(db_path)
     rows = conn.execute("SELECT name, real_name, text, time, stamp_filename FROM comments ORDER BY id ASC").fetchall()
@@ -68,7 +84,7 @@ def fetch_all_for(db_path: str):
             "name": r[0],
             "real_name": r[1],
             "text": r[2],
-            "time": r[3],
+            "time": to_hhmm(r[3]),
             "stamp": stamp,
             "stamp_url": f"/static/stamp/{stamp}" if stamp else None
         })
@@ -166,7 +182,7 @@ def _on_history_request(data=None):
 
 @socketio.on("new_comment")
 def _on_new_comment(data):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_hhmm = datetime.now(JST).strftime("%H:%M")
     raw_session = None
     if isinstance(data, dict):
         raw_session = data.get("session")
@@ -183,7 +199,7 @@ def _on_new_comment(data):
         "name": data.get("name", "名無し"),
         "real_name": data.get("real_name", ""),
         "text": data.get("text", "") if not requested_stamp else "",
-        "time": data.get("time", now),
+        "time": now_hhmm,
         "stamp": requested_stamp,
         "stamp_url": f"/static/stamp/{requested_stamp}" if requested_stamp else None,
     }

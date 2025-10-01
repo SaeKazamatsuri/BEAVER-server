@@ -64,15 +64,18 @@
               :key="i"
               class="bg-white p-2 rounded-md shadow-sm break-words"
             >
-              <div class="font-bold">{{ m.name }}</div>
-              <div v-if="m.stamp">
+              <div class="flex items-baseline justify-between gap-3">
+                <div class="font-bold">{{ m.name }}</div>
+                <div class="text-xs text-gray-500">{{ m.time }}</div>
+              </div>
+              <div v-if="m.stamp" class="mt-1">
                 <img
                   :src="m.stamp_url || stampUrl(m.stamp)"
                   alt=""
                   class="h-20 w-20 object-contain"
                 />
               </div>
-              <div v-else>{{ m.text }}</div>
+              <div v-else class="mt-1">{{ m.text }}</div>
             </li>
             {% endraw %}
           </ul>
