@@ -60,6 +60,8 @@ def init_db_for(db_path: str) -> None:
     cols = [r[1] for r in conn.execute("PRAGMA table_info(comments)")]
     if "stamp_filename" not in cols:
         conn.execute("ALTER TABLE comments ADD COLUMN stamp_filename TEXT")
+    if "created_at" not in cols:
+        conn.execute("ALTER TABLE comments ADD COLUMN created_at TEXT")
     conn.commit()
     conn.close()
 
@@ -73,29 +75,79 @@ def to_hhmm(value: str) -> str:
         return f"{h:02d}:{mm}"
     return value
 
+def _derive_dt_from_hhmm(hhmm: str) -> datetime | None:
+    m = re.search(r"(\d{1,2}):(\d{2})", hhmm or "")
+    if not m:
+        return None
+    h = int(m.group(1))
+    mi = int(m.group(2))
+    now_local = datetime.now(JST)
+    dt_local = now_local.replace(hour=h, minute=mi, second=0, microsecond=0)
+    if dt_local > now_local:
+        dt_local = dt_local - timedelta(days=1)
+    return dt_local
+
 def fetch_all_for(db_path: str):
     conn = sqlite3.connect(db_path)
-    rows = conn.execute("SELECT name, real_name, text, time, stamp_filename FROM comments ORDER BY id ASC").fetchall()
+    cur = conn.cursor()
+    cols = [r[1] for r in cur.execute("PRAGMA table_info(comments)")]
+    has_created = "created_at" in cols
+    if has_created:
+        rows = cur.execute("SELECT name, real_name, text, time, stamp_filename, created_at FROM comments ORDER BY id ASC").fetchall()
+    else:
+        rows = cur.execute("SELECT name, real_name, text, time, stamp_filename FROM comments ORDER BY id ASC").fetchall()
     conn.close()
     out = []
     for r in rows:
+        name = r[0]
+        real_name = r[1]
+        text = r[2]
+        hhmm = to_hhmm(r[3])
         stamp = r[4]
+        ts = None
+        iso = None
+        if has_created:
+            created_iso = r[5]
+            if isinstance(created_iso, str) and created_iso:
+                try:
+                    dt = datetime.fromisoformat(created_iso.replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    ts = dt.timestamp()
+                    iso = dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+                except Exception:
+                    ts = None
+                    iso = None
+        if ts is None:
+            dt_local = _derive_dt_from_hhmm(hhmm)
+            if dt_local is not None:
+                ts = dt_local.astimezone(timezone.utc).timestamp()
+                iso = dt_local.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         out.append({
-            "name": r[0],
-            "real_name": r[1],
-            "text": r[2],
-            "time": to_hhmm(r[3]),
+            "name": name,
+            "real_name": real_name,
+            "text": text,
+            "time": hhmm,
             "stamp": stamp,
-            "stamp_url": f"/static/stamp/{stamp}" if stamp else None
+            "stamp_url": f"/static/stamp/{stamp}" if stamp else None,
+            "server_ts": ts,
+            "server_time_iso": iso,
         })
     return out
 
 def insert_comment_for(db_path: str, entry: dict) -> None:
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO comments (name, real_name, text, time, stamp_filename) VALUES (?, ?, ?, ?, ?)",
-        (entry["name"], entry["real_name"], entry["text"], entry["time"], entry.get("stamp")),
-    )
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(comments)")]
+    if "created_at" in cols:
+        conn.execute(
+            "INSERT INTO comments (name, real_name, text, time, stamp_filename, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (entry["name"], entry["real_name"], entry["text"], entry["time"], entry.get("stamp"), entry.get("created_at")),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO comments (name, real_name, text, time, stamp_filename) VALUES (?, ?, ?, ?, ?)",
+            (entry["name"], entry["real_name"], entry["text"], entry["time"], entry.get("stamp")),
+        )
     conn.commit()
     conn.close()
 
@@ -182,7 +234,9 @@ def _on_history_request(data=None):
 
 @socketio.on("new_comment")
 def _on_new_comment(data):
-    now_hhmm = datetime.now(JST).strftime("%H:%M")
+    now_jst = datetime.now(JST)
+    now_utc = now_jst.astimezone(timezone.utc)
+    now_hhmm = now_jst.strftime("%H:%M")
     raw_session = None
     if isinstance(data, dict):
         raw_session = data.get("session")
@@ -202,6 +256,9 @@ def _on_new_comment(data):
         "time": now_hhmm,
         "stamp": requested_stamp,
         "stamp_url": f"/static/stamp/{requested_stamp}" if requested_stamp else None,
+        "server_ts": now_utc.timestamp(),
+        "server_time_iso": now_utc.isoformat().replace("+00:00", "Z"),
+        "created_at": now_utc.isoformat().replace("+00:00", "Z"),
     }
     with storage_lock:
         message_logs[session_key].append(entry)
