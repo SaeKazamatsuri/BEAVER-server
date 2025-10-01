@@ -82,7 +82,7 @@
           ref="footer"
           class="fixed bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)] flex flex-col gap-3 min-h-[260px]"
         >
-          <h2 class="text-lg font-bold text-rose-500">comment</h2>
+          <h2 class="text-xl font-bold text-rose-500">comment</h2>
 
           <div>
             <div class="flex items-center justify-between mb-2">
@@ -90,26 +90,48 @@
               <button
                 @click="reloadStamps"
                 class="text-sm px-2 py-1 border rounded-md"
+                :class="cooldownActive ? 'opacity-60 cursor-not-allowed' : ''"
+                :disabled="cooldownActive"
               >
                 更新
               </button>
             </div>
-            <div class="flex flex-wrap gap-2">
-              {% raw %}
-              <button
-                v-for="s in stamps"
-                :key="s.name"
-                @click="sendStamp(s.name)"
-                class="p-1 border rounded-md bg-white active:translate-y-px"
-                title="スタンプを送信"
+
+            <div class="relative">
+              <div class="flex flex-wrap gap-2 select-none">
+                {% raw %}
+                <button
+                  v-for="s in stamps"
+                  :key="s.name"
+                  @click="sendStamp(s.name)"
+                  class="p-1 border rounded-md bg-white active:translate-y-px"
+                  :class="cooldownActive ? 'opacity-60 cursor-not-allowed' : ''"
+                  :disabled="cooldownActive"
+                  title="スタンプを送信"
+                >
+                  <img
+                    :src="s.url"
+                    :alt="s.name"
+                    class="h-12 w-12 object-contain"
+                  />
+                </button>
+                {% endraw %}
+              </div>
+
+              <div
+                v-show="cooldownActive"
+                class="pointer-events-none absolute inset-0 overflow-hidden rounded-md"
               >
-                <img
-                  :src="s.url"
-                  :alt="s.name"
-                  class="h-12 w-12 object-contain"
-                />
-              </button>
-              {% endraw %}
+                <div
+                  class="absolute left-0 right-0 top-0 bg-black/50"
+                  :style="{ height: overlayHeightPercent + '%' }"
+                ></div>
+                <div
+                  class="absolute inset-0 grid place-items-center text-white font-bold text-lg"
+                >
+                  <span v-text="Math.ceil(cooldownRemaining)"></span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -184,11 +206,19 @@
             templateValue: "",
             footerHeight: 260,
             ro: null,
+            cooldownActive: false,
+            cooldownDuration: 10,
+            cooldownRemaining: 0,
+            cooldownIntervalId: null,
           };
         },
         computed: {
           logoUrl() {
             return LOGO_URL;
+          },
+          overlayHeightPercent() {
+            const v = (this.cooldownRemaining / this.cooldownDuration) * 100;
+            return Math.max(0, Math.min(100, v));
           },
         },
         mounted() {
@@ -225,6 +255,10 @@
         beforeUnmount() {
           if (this.ro) this.ro.disconnect();
           window.removeEventListener("resize", this.updateFooterHeight);
+          if (this.cooldownIntervalId) {
+            clearInterval(this.cooldownIntervalId);
+            this.cooldownIntervalId = null;
+          }
         },
         methods: {
           reloadStamps() {
@@ -238,6 +272,7 @@
             return `/static/stamp/${name}`;
           },
           sendStamp(name) {
+            if (this.cooldownActive) return;
             const time = new Date()
               .toISOString()
               .slice(0, 19)
@@ -250,6 +285,27 @@
               stamp: name,
               time,
             });
+            this.startCooldown();
+          },
+          startCooldown() {
+            this.cooldownActive = true;
+            this.cooldownRemaining = this.cooldownDuration;
+            if (this.cooldownIntervalId) {
+              clearInterval(this.cooldownIntervalId);
+              this.cooldownIntervalId = null;
+            }
+            const tickMs = 100;
+            this.cooldownIntervalId = setInterval(() => {
+              this.cooldownRemaining = Math.max(
+                0,
+                this.cooldownRemaining - tickMs / 1000
+              );
+              if (this.cooldownRemaining <= 0) {
+                clearInterval(this.cooldownIntervalId);
+                this.cooldownIntervalId = null;
+                this.cooldownActive = false;
+              }
+            }, tickMs);
           },
           observeFooter() {
             if (!this.$refs.footer) return;
