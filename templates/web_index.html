@@ -55,7 +55,7 @@
           id="commentListWrapper"
           ref="listWrapper"
           class="overflow-y-auto p-3"
-          :style="{ height: `calc(100vh - ${footerHeight}px)` }"
+          :style="{ height: `calc(100vh - ${footerHeight+50}px)` }"
         >
           <ul class="space-y-2">
             {% raw %}
@@ -106,7 +106,7 @@
                 <img
                   :src="s.url"
                   :alt="s.name"
-                  class="h-20 w-20 object-contain"
+                  class="h-12 w-12 object-contain"
                 />
               </button>
               {% endraw %}
