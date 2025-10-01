@@ -1,206 +1,273 @@
 <!DOCTYPE html>
 <html lang="ja">
-
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>コメント送信フォーム</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-</head>
-
-<body class="bg-sky-300">
-  <div id="app" class="h-screen" data-logo-url="{{ url_for('static', filename='images/BEAVERlogo.png') }}"
-    data-session-id="{{ server_session_id }}">
-
-    <div v-if="!ready" class="h-screen w-full grid place-items-center px-5">
-      <div class="w-full max-w-sm text-center">
-        <img :src="logoUrl" alt="BEAVER Logo" class="block max-w-full h-auto mx-auto mb-5" />
-        <h2 class="text-xl font-bold text-rose-500 mb-3">名前を入力してください</h2>
-        <input type="text" v-model.trim="nameInput" placeholder="ニックネーム（表示用の名前）"
-          class="w-full block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-3" />
-        <input type="text" v-model.trim="realNameInput" placeholder="本名（記録用）"
-          class="w-full block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-5" />
-        <button @click="saveName"
-          class="w-full bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
-          OK
-        </button>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>コメント送信フォーム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  </head>
+  <body class="bg-sky-300">
+    <div
+      id="app"
+      class="h-screen"
+      data-logo-url="{{ url_for('static', filename='images/BEAVERlogo.png') }}"
+      data-session-id="{{ server_session_id }}"
+      data-session-name="{{ session_name }}"
+    >
+      <div v-if="!ready" class="h-screen w-full grid place-items-center px-5">
+        <div class="w-full max-w-sm text-center">
+          <img
+            :src="logoUrl"
+            alt="BEAVER Logo"
+            class="block max-w-full h-auto mx-auto mb-5"
+          />
+          <h2 class="text-xl font-bold text-rose-500 mb-3">
+            名前を入力してください
+          </h2>
+          <input
+            type="text"
+            v-model.trim="nameInput"
+            placeholder="ニックネーム（表示用の名前）"
+            class="w-full block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-3"
+          />
+          <input
+            type="text"
+            v-model.trim="realNameInput"
+            placeholder="本名（記録用）"
+            class="w-full block rounded-lg border border-gray-300 px-3 py-2 text-lg mb-5"
+          />
+          <button
+            @click="saveName"
+            class="w-full bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px"
+          >
+            OK
+          </button>
+        </div>
       </div>
-    </div>
 
-    <div v-else class="h-screen overflow-hidden relative">
-      <div id="commentListWrapper" ref="listWrapper" class="overflow-y-auto p-3"
-        :style="{ height: `calc(100vh - ${footerHeight}px)` }">
-        <ul class="space-y-2">
-          {% raw %}
-          <li v-for="(m, i) in messages" :key="i" class="bg-white p-2 rounded-md shadow-sm break-words">
-            <strong>{{ m.name }}</strong>: {{ m.text }}
-          </li>
-          {% endraw %}
-        </ul>
-      </div>
-
-      <div ref="footer"
-        class="fixed bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)] flex flex-col gap-2 min-h-[200px]">
-        <h2 class="text-lg font-bold text-rose-500">comment</h2>
-        <div>
-          <label class="block font-bold text-rose-500 mb-1" for="templates">定型文を選択</label>
-          <select id="templates" v-model="templateValue" @change="applyTemplate"
-            class="w-full rounded-md border border-gray-300 px-2 py-2 text-base">
-            <option value="">-------- 定型文を選択 --------</option>
-            <option value="おはようございます">おはようございます</option>
-            <option value="こんにちは">こんにちは</option>
-            <option value="よろしくお願いします">よろしくお願いします</option>
-            <option value="ありがとうございました">ありがとうございました</option>
-            <option value="お疲れさまでした">お疲れさまでした</option>
-            <option value="頑張れー">頑張れー</option>
-          </select>
+      <div v-else class="h-screen overflow-hidden relative">
+        <div
+          id="commentListWrapper"
+          ref="listWrapper"
+          class="overflow-y-auto p-3"
+          :style="{ height: `calc(100vh - ${footerHeight}px)` }"
+        >
+          <ul class="space-y-2">
+            {% raw %}
+            <li
+              v-for="(m, i) in messages"
+              :key="i"
+              class="bg-white p-2 rounded-md shadow-sm break-words"
+            >
+              <strong>{{ m.name }}</strong>: {{ m.text }}
+            </li>
+            {% endraw %}
+          </ul>
         </div>
 
-        <form @submit.prevent="sendComment" class="flex gap-2">
-          <input type="text" v-model.trim="msg" required placeholder="コメントの内容を入力..."
-            class="flex-1 min-w-0 rounded-md border border-gray-300 px-3 py-2 text-base shadow-[3px_3px_0px_#2b3a4b]" />
-          <button type="submit"
-            class="flex items-center justify-center bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-base shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px">
-            送信
-          </button>
-        </form>
+        <div
+          ref="footer"
+          class="fixed bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)] flex flex-col gap-2 min-h-[200px]"
+        >
+          <h2 class="text-lg font-bold text-rose-500">comment</h2>
+
+          <div>
+            <label class="block font-bold text-rose-500 mb-1" for="templates"
+              >定型文を選択</label
+            >
+            <select
+              id="templates"
+              v-model="templateValue"
+              @change="applyTemplate"
+              class="w-full rounded-md border border-gray-300 px-2 py-2 text-base"
+            >
+              <option value="">-------- 定型文を選択 --------</option>
+              <option value="おはようございます">おはようございます</option>
+              <option value="こんにちは">こんにちは</option>
+              <option value="よろしくお願いします">よろしくお願いします</option>
+              <option value="ありがとうございました">
+                ありがとうございました
+              </option>
+              <option value="お疲れさまでした">お疲れさまでした</option>
+              <option value="頑張れー">頑張れー</option>
+            </select>
+          </div>
+
+          <form @submit.prevent="sendComment" class="flex gap-2">
+            <input
+              type="text"
+              v-model.trim="msg"
+              required
+              placeholder="コメントの内容を入力..."
+              class="flex-1 min-w-0 rounded-md border border-gray-300 px-3 py-2 text-base shadow-[3px_3px_0px_#2b3a4b]"
+            />
+            <button
+              type="submit"
+              class="flex items-center justify-center bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-base shadow-[3px_3px_0px_#2b3a4b] active:translate-y-px"
+            >
+              送信
+            </button>
+          </form>
+        </div>
       </div>
     </div>
-  </div>
 
-  <script id="initial-messages" type="application/json">
-    {{ initial_messages | tojson }}
-  </script>
+    <script id="initial-messages" type="application/json">
+      {{ initial_messages | tojson }}
+    </script>
 
-  <script>
-    const { createApp, nextTick } = Vue;
-    const rootEl = document.getElementById('app');
-    const SERVER_SESSION_ID = rootEl.dataset.sessionId;
-    const LOGO_URL = rootEl.dataset.logoUrl;
-    const initialMessages = JSON.parse(document.getElementById('initial-messages').textContent || '[]');
+    <script>
+      const { createApp, nextTick } = Vue;
+      const rootEl = document.getElementById("app");
+      const SERVER_SESSION_ID = rootEl.dataset.sessionId;
+      const LOGO_URL = rootEl.dataset.logoUrl;
+      const SESSION_NAME = rootEl.dataset.sessionName;
+      const initialMessages = JSON.parse(
+        document.getElementById("initial-messages").textContent || "[]"
+      );
 
-    createApp({
-      data() {
-        return {
-          socket: null,
-          messages: initialMessages || [],
-          msg: "",
-          nameInput: "",
-          realNameInput: "",
-          username: "",
-          realname: "",
-          sessionId: "",
-          ready: false,
-          templateValue: "",
-          footerHeight: 200,
-          ro: null
-        };
-      },
-      computed: {
-        logoUrl() {
-          return LOGO_URL;
-        }
-      },
-      mounted() {
-        const u = this.getCookie("username");
-        const r = this.getCookie("realname");
-        const s = this.getCookie("session_id");
-        if (u && r && s === SERVER_SESSION_ID) {
-          this.username = u;
-          this.realname = r;
-          this.sessionId = s;
-          this.ready = true;
-        }
-        this.socket = io();
-        this.socket.on("history", (data) => {
-          this.messages = Array.isArray(data) ? data : [];
-          this.scrollToBottom();
-        });
-        this.socket.on("new_comment", (data) => {
-          this.messages.push(data);
-          this.scrollToBottom();
-        });
-        this.$nextTick(() => {
-          if (this.ready) this.observeFooter();
-          this.scrollToBottom();
-        });
-        window.addEventListener('resize', this.updateFooterHeight);
-      },
-      beforeUnmount() {
-        if (this.ro) this.ro.disconnect();
-        window.removeEventListener('resize', this.updateFooterHeight);
-      },
-      methods: {
-        observeFooter() {
-          if (!this.$refs.footer) return;
-          this.ro = new ResizeObserver((entries) => {
-            const h = Math.max(200, Math.round(entries[0].contentRect.height));
+      createApp({
+        data() {
+          return {
+            socket: null,
+            messages: initialMessages || [],
+            msg: "",
+            nameInput: "",
+            realNameInput: "",
+            username: "",
+            realname: "",
+            sessionId: "",
+            ready: false,
+            templateValue: "",
+            footerHeight: 200,
+            ro: null,
+          };
+        },
+        computed: {
+          logoUrl() {
+            return LOGO_URL;
+          },
+        },
+        mounted() {
+          const u = this.getCookie("username");
+          const r = this.getCookie("realname");
+          const s = this.getCookie("session_id");
+          if (u && r && s === SERVER_SESSION_ID) {
+            this.username = u;
+            this.realname = r;
+            this.sessionId = s;
+            this.ready = true;
+          }
+
+          this.socket = io({ query: { session: SESSION_NAME } });
+
+          this.socket.on("history", (data) => {
+            this.messages = Array.isArray(data) ? data : [];
+            this.scrollToBottom();
+          });
+
+          this.socket.on("new_comment", (data) => {
+            this.messages.push(data);
+            this.scrollToBottom();
+          });
+
+          this.$nextTick(() => {
+            if (this.ready) this.observeFooter();
+            this.scrollToBottom();
+          });
+
+          window.addEventListener("resize", this.updateFooterHeight);
+        },
+        beforeUnmount() {
+          if (this.ro) this.ro.disconnect();
+          window.removeEventListener("resize", this.updateFooterHeight);
+        },
+        methods: {
+          observeFooter() {
+            if (!this.$refs.footer) return;
+            this.ro = new ResizeObserver((entries) => {
+              const h = Math.max(
+                200,
+                Math.round(entries[0].contentRect.height)
+              );
+              if (h !== this.footerHeight) {
+                this.footerHeight = h;
+                this.scrollToBottom();
+              }
+            });
+            this.ro.observe(this.$refs.footer);
+            this.updateFooterHeight();
+          },
+          updateFooterHeight() {
+            if (!this.$refs.footer) return;
+            const rect = this.$refs.footer.getBoundingClientRect();
+            const h = Math.max(200, Math.round(rect.height));
             if (h !== this.footerHeight) {
               this.footerHeight = h;
               this.scrollToBottom();
             }
-          });
-          this.ro.observe(this.$refs.footer);
-          this.updateFooterHeight();
+          },
+          sendComment() {
+            if (!this.msg) return;
+            const time = new Date()
+              .toISOString()
+              .slice(0, 19)
+              .replace("T", " ");
+            this.socket.emit("new_comment", {
+              session: SESSION_NAME,
+              name: this.username,
+              real_name: this.realname,
+              text: this.msg,
+              time,
+            });
+            this.msg = "";
+          },
+          saveName() {
+            if (!this.nameInput || !this.realNameInput) {
+              alert("ニックネームと本名を入力してください。");
+              return;
+            }
+            this.setCookie("username", this.nameInput, 7);
+            this.setCookie("realname", this.realNameInput, 7);
+            this.setCookie("session_id", SERVER_SESSION_ID, 7);
+            this.username = this.nameInput;
+            this.realname = this.realNameInput;
+            this.sessionId = SERVER_SESSION_ID;
+            this.ready = true;
+            this.$nextTick(() => {
+              this.observeFooter();
+              this.scrollToBottom();
+            });
+          },
+          applyTemplate() {
+            if (this.templateValue) this.msg = this.templateValue;
+          },
+          scrollToBottom() {
+            nextTick(() => {
+              const el = this.$refs.listWrapper;
+              if (el) el.scrollTop = el.scrollHeight;
+            });
+          },
+          getCookie(name) {
+            const m = document.cookie.match(
+              new RegExp("(^| )" + name + "=([^;]+)")
+            );
+            return m ? decodeURIComponent(m[2]) : null;
+          },
+          setCookie(name, value, days) {
+            const d = new Date();
+            d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+            document.cookie = `${name}=${encodeURIComponent(
+              value
+            )}; expires=${d.toUTCString()}; path=/`;
+          },
         },
-        updateFooterHeight() {
-          if (!this.$refs.footer) return;
-          const rect = this.$refs.footer.getBoundingClientRect();
-          const h = Math.max(200, Math.round(rect.height));
-          if (h !== this.footerHeight) {
-            this.footerHeight = h;
-            this.scrollToBottom();
-          }
-        },
-        sendComment() {
-          if (!this.msg) return;
-          this.socket.emit("new_comment", {
-            name: this.username,
-            real_name: this.realname,
-            text: this.msg
-          });
-          this.msg = "";
-        },
-        saveName() {
-          if (!this.nameInput || !this.realNameInput) {
-            alert("ニックネームと本名を入力してください。");
-            return;
-          }
-          this.setCookie("username", this.nameInput, 7);
-          this.setCookie("realname", this.realNameInput, 7);
-          this.setCookie("session_id", SERVER_SESSION_ID, 7);
-          this.username = this.nameInput;
-          this.realname = this.realNameInput;
-          this.sessionId = SERVER_SESSION_ID;
-          this.ready = true;
-          this.$nextTick(() => {
-            this.observeFooter();
-            this.scrollToBottom();
-          });
-        },
-        applyTemplate() {
-          if (this.templateValue) this.msg = this.templateValue;
-        },
-        scrollToBottom() {
-          nextTick(() => {
-            const el = this.$refs.listWrapper;
-            if (el) el.scrollTop = el.scrollHeight;
-          });
-        },
-        getCookie(name) {
-          const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-          return m ? decodeURIComponent(m[2]) : null;
-        },
-        setCookie(name, value, days) {
-          const d = new Date();
-          d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-          document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/`;
-        }
-      }
-    }).mount("#app");
-  </script>
-</body>
-
+      }).mount("#app");
+    </script>
+  </body>
 </html>
