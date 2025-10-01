@@ -64,7 +64,15 @@
               :key="i"
               class="bg-white p-2 rounded-md shadow-sm break-words"
             >
-              <strong>{{ m.name }}</strong>: {{ m.text }}
+              <div class="font-bold">{{ m.name }}</div>
+              <div v-if="m.stamp">
+                <img
+                  :src="m.stamp_url || stampUrl(m.stamp)"
+                  alt=""
+                  class="h-20 w-20 object-contain"
+                />
+              </div>
+              <div v-else>{{ m.text }}</div>
             </li>
             {% endraw %}
           </ul>
@@ -72,9 +80,38 @@
 
         <div
           ref="footer"
-          class="fixed bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)] flex flex-col gap-2 min-h-[200px]"
+          class="fixed bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl p-4 border-t-2 border-gray-300 shadow-[0_-2px_5px_rgba(0,0,0,0.2)] flex flex-col gap-3 min-h-[260px]"
         >
           <h2 class="text-lg font-bold text-rose-500">comment</h2>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block font-bold text-rose-500">スタンプ</label>
+              <button
+                @click="reloadStamps"
+                class="text-sm px-2 py-1 border rounded-md"
+              >
+                更新
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {% raw %}
+              <button
+                v-for="s in stamps"
+                :key="s.name"
+                @click="sendStamp(s.name)"
+                class="p-1 border rounded-md bg-white active:translate-y-px"
+                title="スタンプを送信"
+              >
+                <img
+                  :src="s.url"
+                  :alt="s.name"
+                  class="h-20 w-20 object-contain"
+                />
+              </button>
+              {% endraw %}
+            </div>
+          </div>
 
           <div>
             <label class="block font-bold text-rose-500 mb-1" for="templates"
@@ -136,6 +173,7 @@
           return {
             socket: null,
             messages: initialMessages || [],
+            stamps: [],
             msg: "",
             nameInput: "",
             realNameInput: "",
@@ -144,7 +182,7 @@
             sessionId: "",
             ready: false,
             templateValue: "",
-            footerHeight: 200,
+            footerHeight: 260,
             ro: null,
           };
         },
@@ -182,17 +220,42 @@
           });
 
           window.addEventListener("resize", this.updateFooterHeight);
+          this.reloadStamps();
         },
         beforeUnmount() {
           if (this.ro) this.ro.disconnect();
           window.removeEventListener("resize", this.updateFooterHeight);
         },
         methods: {
+          reloadStamps() {
+            fetch("/api/stamps")
+              .then((r) => r.json())
+              .then((list) => {
+                this.stamps = Array.isArray(list) ? list : [];
+              });
+          },
+          stampUrl(name) {
+            return `/static/stamp/${name}`;
+          },
+          sendStamp(name) {
+            const time = new Date()
+              .toISOString()
+              .slice(0, 19)
+              .replace("T", " ");
+            this.socket.emit("new_comment", {
+              session: SESSION_NAME,
+              name: this.username,
+              real_name: this.realname,
+              text: "",
+              stamp: name,
+              time,
+            });
+          },
           observeFooter() {
             if (!this.$refs.footer) return;
             this.ro = new ResizeObserver((entries) => {
               const h = Math.max(
-                200,
+                260,
                 Math.round(entries[0].contentRect.height)
               );
               if (h !== this.footerHeight) {
@@ -206,7 +269,7 @@
           updateFooterHeight() {
             if (!this.$refs.footer) return;
             const rect = this.$refs.footer.getBoundingClientRect();
-            const h = Math.max(200, Math.round(rect.height));
+            const h = Math.max(260, Math.round(rect.height));
             if (h !== this.footerHeight) {
               this.footerHeight = h;
               this.scrollToBottom();
